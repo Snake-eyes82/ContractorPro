@@ -2,7 +2,7 @@
 
 import sys
 import os
-from datetime import date # Make sure 'date' is imported for date.today()
+from datetime import date
 
 # Get the directory where the script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -13,22 +13,20 @@ if script_dir not in sys.path:
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QHBoxLayout,
-    QLabel, QLineEdit, QFormLayout # Added QLineEdit and QFormLayout for the "Add New Project" section
+    QLabel, QLineEdit, QFormLayout, QGroupBox # Added QGroupBox for clearer sections
 )
 from PySide6.QtCore import Qt, Signal, QSize, QObject
 
-from database import Session, Project, create_db_and_tables, EstimateLineItem
+from database import SessionLocal, Project, create_db_and_tables, EstimateLineItem
 from general_info_view import GeneralInfoWindow
 from estimate_line_items_view import EstimateLineItemsWindow
 
-# project_options_dialog is no longer explicitly needed if you have direct buttons
-# from project_options_dialog import ProjectOptionsDialog # <-- REMOVE THIS if you're not using it for the new flow
 
 class ContractorProApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.db_session = Session()
-        self.setWindowTitle("ContractorPro Estimator - Main Dashboard") # Set window title from screenshot
+        self.db_session = SessionLocal()
+        self.setWindowTitle("ContractorPro Estimator - Main Dashboard")
         self.setGeometry(100, 100, 1000, 700)
         self.setMinimumSize(QSize(800, 600))
 
@@ -36,50 +34,48 @@ class ContractorProApp(QMainWindow):
         self.open_estimate_line_items_windows = {} # To track open EstimateLineItemsView instances by project_id
 
         self.init_ui()
-        self.load_projects() # Load projects into the dashboard table
+        self.load_projects() # Load all projects initially
 
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # --- "Add New Project" Section (matching the top of the dashboard image) ---
-        add_project_group_box = QWidget()
-        add_project_layout = QFormLayout(add_project_group_box)
-        add_project_layout.setContentsMargins(10, 10, 10, 10) # Add padding
-        add_project_layout.setSpacing(8)
+        # --- "Search Projects" Section ---
+        search_project_group_box = QGroupBox("Search Projects") # Changed to QGroupBox
+        search_layout = QFormLayout(search_project_group_box)
+        search_layout.setContentsMargins(10, 20, 10, 10) # Add padding
+        search_layout.setSpacing(8)
 
-        add_project_layout.addRow(QLabel("<h3>Add New Project:</h3>"))
+        self.search_project_name_input = QLineEdit()
+        search_layout.addRow("Project Name:", self.search_project_name_input)
 
-        self.new_project_name_input = QLineEdit()
-        add_project_layout.addRow("Project Name:", self.new_project_name_input)
+        self.search_client_name_input = QLineEdit()
+        search_layout.addRow("Client Name:", self.search_client_name_input)
 
-        self.new_client_name_input = QLineEdit()
-        add_project_layout.addRow("Client Name:", self.new_client_name_input)
+        search_buttons_layout = QHBoxLayout()
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.load_projects) # Re-use load_projects for search
+        search_buttons_layout.addWidget(self.search_button)
 
-        self.new_client_phone_input = QLineEdit()
-        add_project_layout.addRow("Client Phone:", self.new_client_phone_input)
+        self.clear_search_button = QPushButton("Clear Search")
+        self.clear_search_button.clicked.connect(self._clear_search_fields)
+        search_buttons_layout.addWidget(self.clear_search_button)
 
-        self.new_project_address_input = QLineEdit() # Simplified for the dashboard form
-        add_project_layout.addRow("Project Address:", self.new_project_address_input)
+        search_layout.addRow(search_buttons_layout)
 
-        self.add_new_project_button = QPushButton("Add New Project")
-        self.add_new_project_button.clicked.connect(self._add_new_project_from_form) # New method name
-        add_project_layout.addRow(self.add_new_project_button)
-
-        main_layout.addWidget(add_project_group_box)
-        main_layout.addSpacing(20) # Space between add section and table
+        main_layout.addWidget(search_project_group_box)
+        main_layout.addSpacing(20) # Space between search section and table
 
         # --- "Existing Projects" Table ---
         main_layout.addWidget(QLabel("<h3>Existing Projects:</h3>"))
         self.projects_table = QTableWidget()
-        # Columns based on the screenshot: ID, Project Name, Client Name, Est. Date
         self.projects_table.setColumnCount(4)
         self.projects_table.setHorizontalHeaderLabels(["ID", "Project Name", "Client Name", "Est. Date"])
         self.projects_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.projects_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.projects_table.setSelectionMode(QTableWidget.SingleSelection) # Allow only single selection
-        self.projects_table.setEditTriggers(QTableWidget.NoEditTriggers) # Make table read-only
+        self.projects_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.projects_table.setEditTriggers(QTableWidget.NoEditTriggers)
         main_layout.addWidget(self.projects_table)
         main_layout.addSpacing(20) # Space between table and buttons
 
@@ -87,20 +83,24 @@ class ContractorProApp(QMainWindow):
         action_buttons_layout = QHBoxLayout()
         action_buttons_layout.addStretch(1) # Push buttons to the right
 
+        # New: Add Project Button
+        self.add_project_button = QPushButton("Add New Project")
+        self.add_project_button.clicked.connect(self._add_new_project) # New method
+        action_buttons_layout.addWidget(self.add_project_button)
+
         self.open_general_info_button = QPushButton("Open General Info")
         self.open_general_info_button.clicked.connect(self._open_general_info_for_selected_project)
-        self.open_general_info_button.setEnabled(False) # Disabled until project selected
+        self.open_general_info_button.setEnabled(False)
         action_buttons_layout.addWidget(self.open_general_info_button)
 
         self.open_line_items_button = QPushButton("Open Line Items")
         self.open_line_items_button.clicked.connect(self._open_line_items_for_selected_project)
-        self.open_line_items_button.setEnabled(False) # Disabled until project selected
+        self.open_line_items_button.setEnabled(False)
         action_buttons_layout.addWidget(self.open_line_items_button)
-        
-        # Add Delete Button as it's common on dashboards
+
         self.delete_project_button = QPushButton("Delete Project")
         self.delete_project_button.clicked.connect(self._delete_selected_project)
-        self.delete_project_button.setEnabled(False) # Disabled until project selected
+        self.delete_project_button.setEnabled(False)
         action_buttons_layout.addWidget(self.delete_project_button)
 
 
@@ -117,47 +117,22 @@ class ContractorProApp(QMainWindow):
         self.open_line_items_button.setEnabled(enable_buttons)
         self.delete_project_button.setEnabled(enable_buttons)
 
-    def _add_new_project_from_form(self):
-        """Adds a new project using the form fields on the dashboard."""
-        project_name = self.new_project_name_input.text().strip()
-        client_name = self.new_client_name_input.text().strip()
-        client_phone = self.new_client_phone_input.text().strip()
-        project_address_street = self.new_project_address_input.text().strip() # Using simplified address
+    def _clear_search_fields(self):
+        """Clears the search input fields and reloads all projects."""
+        self.search_project_name_input.clear()
+        self.search_client_name_input.clear()
+        self.load_projects() # Reload all projects
 
-        if not project_name or not client_name:
-            QMessageBox.warning(self, "Input Error", "Project Name and Client Name are required to add a new project.")
-            return
-
-        try:
-            new_project = Project(
-                project_name=project_name,
-                client_name=client_name,
-                client_phone=client_phone if client_phone else None,
-                project_address_street=project_address_street if project_address_street else None,
-                estimate_date=date.today(), # Default for new projects
-                bid_due_date=date.today(), # Default for new projects
-                project_status="New", # Default status
-                markup_percentage=0.0, # Default percentages
-                overhead_percentage=0.0,
-                profit_percentage=0.0
-            )
-            self.db_session.add(new_project)
-            self.db_session.commit()
-            QMessageBox.information(self, "Success", "New project added successfully!")
-            
-            # Clear the new project form fields
-            self.new_project_name_input.clear()
-            self.new_client_name_input.clear()
-            self.new_client_phone_input.clear()
-            self.new_project_address_input.clear()
-
-            self.load_projects() # Refresh the dashboard table
-            # Optionally, auto-select the new project or open its general info window
-            # self._open_general_info_window(new_project.project_id)
-
-        except Exception as e:
-            self.db_session.rollback()
-            QMessageBox.critical(self, "Database Error", f"Failed to add new project: {e}")
+    def _add_new_project(self):
+        """Opens GeneralInfoWindow to add a brand new project."""
+        # Open the GeneralInfoWindow without a project_id, indicating a new project
+        general_info_window = GeneralInfoWindow(project_id=None, parent=self)
+        # Connect the signal to refresh the dashboard when the new project is saved
+        general_info_window.project_updated_signal.connect(self.load_projects)
+        general_info_window.show()
+        # No need to store it in open_general_info_windows until it's actually saved
+        # and has an ID. It will be added to the dictionary when it's opened for an existing ID.
+        # This window will also manage its own closing after save, or user can close it.
 
     def _get_selected_project_id(self):
         """Helper to get the project_id from the selected row in the table."""
@@ -193,7 +168,9 @@ class ContractorProApp(QMainWindow):
             self.open_estimate_line_items_windows[project_id].activateWindow()
         else:
             line_items_window = EstimateLineItemsWindow(project_id=project_id, parent=self)
-            line_items_window.project_updated_signal.connect(self.load_projects) # Refresh dashboard after save/update
+            # The line items window calculates its own financial summary.
+            # We connect to project_updated_signal to ensure the main app dashboard updates if relevant project data changes.
+            line_items_window.project_updated_signal.connect(self.load_projects)
             line_items_window.show()
             self.open_estimate_line_items_windows[project_id] = line_items_window
 
@@ -211,6 +188,7 @@ class ContractorProApp(QMainWindow):
             try:
                 project = self.db_session.query(Project).filter_by(project_id=project_id).first()
                 if project:
+                    # Cascade delete line items - configured in models, but good to note
                     self.db_session.delete(project)
                     self.db_session.commit()
                     QMessageBox.information(self, "Success", "Project deleted successfully!")
@@ -230,19 +208,33 @@ class ContractorProApp(QMainWindow):
                 QMessageBox.critical(self, "Database Error", f"Failed to delete project: {e}")
 
     def load_projects(self):
-        """Loads project data into the main dashboard table."""
+        """
+        Loads project data into the main dashboard table, optionally applying search filters.
+        """
         self.projects_table.setRowCount(0)
         try:
-            projects = self.db_session.query(Project).all()
+            # Get search terms
+            search_project_name = self.search_project_name_input.text().strip()
+            search_client_name = self.search_client_name_input.text().strip()
+
+            query = self.db_session.query(Project)
+
+            if search_project_name:
+                query = query.filter(Project.project_name.ilike(f'%{search_project_name}%'))
+            if search_client_name:
+                query = query.filter(Project.client_name.ilike(f'%{search_client_name}%'))
+
+            projects = query.all()
+
             self.projects_table.setRowCount(len(projects))
             for row_idx, project in enumerate(projects):
                 self.projects_table.setItem(row_idx, 0, QTableWidgetItem(str(project.project_id)))
                 self.projects_table.setItem(row_idx, 1, QTableWidgetItem(project.project_name))
                 self.projects_table.setItem(row_idx, 2, QTableWidgetItem(project.client_name))
-                # For Est. Date, format it as YYYY-MM-DD
                 est_date_str = project.estimate_date.strftime('%Y-%m-%d') if project.estimate_date else "N/A"
                 self.projects_table.setItem(row_idx, 3, QTableWidgetItem(est_date_str))
             self.projects_table.resizeColumnsToContents()
+            self._toggle_action_buttons() # Update button states after loading (e.g., if table becomes empty)
         except Exception as e:
             QMessageBox.critical(self, "Database Error", f"Failed to load projects: {e}")
 
