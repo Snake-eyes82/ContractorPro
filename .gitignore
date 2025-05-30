@@ -1,9 +1,24 @@
 # Python virtual environment
+.venv/
 venv/
+env/
 
 # Python compiled files
 *.pyc
 __pycache__/
+
+# Local database (if not intended for version control)
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE-specific files
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # PyInstaller build artifacts (excluding dist/ as requested)
 build/
