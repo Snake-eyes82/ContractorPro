@@ -9,7 +9,7 @@ from datetime import date # Only needed for the __main__ block for standalone te
 # Import your existing view windows. This new dialog will launch them.
 from general_info_view import GeneralInfoWindow
 from estimate_line_items_view import EstimateLineItemsView
-from database import Session, Project # Needed to fetch project details for display
+from src.database import Session, Project # Needed to fetch project details for display
 
 class ProjectOptionsDialog(QDialog):
     # Signals to communicate back to the main application
@@ -119,40 +119,3 @@ class ProjectOptionsDialog(QDialog):
         self.db_session.close() # Close the database session
         super().closeEvent(event) # Call the base class's closeEvent to ensure proper Qt cleanup
 
-# -----------------------------------------------------------------------------
-# The code below is for standalone testing of this dialog.
-# It will create a dummy project if your database is empty, so you can run
-# `python src/project_options_dialog.py` directly to see how it looks.
-# You can ignore or remove this block in a final deployed application.
-# -----------------------------------------------------------------------------
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    # Import necessary components for standalone testing
-    from database import create_db_and_tables, Project, Session
-    # Ensure database tables are created for testing purposes
-    create_db_and_tables()
-
-    session = Session() # Create a session for testing
-    test_project = session.query(Project).first() # Try to get an existing project
-    if not test_project:
-        # If no project exists, create a new one for testing
-        new_project = Project(
-            project_name="Sample Project for Options Dialog Test",
-            client_name="Test Client Co.",
-            estimate_date=date.today(),
-            project_status="Draft",
-            markup_percentage=10.0,
-            overhead_percentage=5.0,
-            profit_percentage=15.0
-        )
-        session.add(new_project)
-        session.commit()
-        test_project_id = new_project.project_id
-    else:
-        test_project_id = test_project.project_id
-    session.close() # Close the test session
-
-    # Create and show the dialog
-    dialog = ProjectOptionsDialog(project_id=test_project_id)
-    dialog.show() # Changed from .exec() to .show()
-    sys.exit(app.exec_()) # Changed from .exec() to .exec_()

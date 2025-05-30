@@ -1,97 +1,106 @@
 # src/general_info_view.py
 
-import sys, os
+import sys
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QPushButton,
-    QMessageBox, QFormLayout, QLineEdit, QLabel, QDateEdit, QComboBox,
-    QTextEdit, QHBoxLayout, QDoubleSpinBox, QGroupBox # QDoubleSpinBox still imported but not used in UI
+    QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget,
+    QPushButton, QMessageBox, QHBoxLayout, QLineEdit, QFormLayout,
+    QDateEdit, QTextEdit, QGridLayout, QGroupBox, QComboBox,
+    QDoubleSpinBox # IMPORTANT: Add QDoubleSpinBox
 )
-from PySide6.QtCore import Qt, Signal, QDate
-from PySide6.QtGui import QDoubleValidator
+from PySide6.QtCore import Qt, Signal, QDate, QSize # QObject is not strictly needed for this class
+from datetime import date # Keep datetime.date for toPython() conversion
 
-from src.database import SessionLocal, Project
-from datetime import date
+from src.database import Session, Project # Assuming Session and Project are imported correctly
 
 class GeneralInfoWindow(QMainWindow):
-    project_updated_signal = Signal() # Signal to notify the main app
+    project_updated_signal = Signal() # Removed (int) as we just need to signal a refresh, not pass ID back
 
-    def __init__(self, project_id: int | None, parent=None):
-        super().__init__(parent)
-        self.db_session = SessionLocal()
-        self.current_project_id = project_id
-        self.project = None # To hold the project object
+    def __init__(self, project_id=None, db_session=None, parent_dashboard=None): # Added db_session and parent_dashboard
+        super().__init__()
+        self.db_session = db_session if db_session is not None else Session() # Use provided session or create new
+        self.parent_dashboard = parent_dashboard # Store reference to the main dashboard
 
-        self.setWindowTitle("Project General Info") # Generic title initially
-        # Adjusted size again, as we're removing financial section
-        self.setGeometry(200, 200, 850, 850) # Reduced height slightly
-        self.setMinimumSize(700, 900) # Reduced min height
+        self.current_project_id = project_id # None for new project, ID for existing
 
-        self.init_ui()
-        self.load_project_data() # Load data or initialize new project
-        self.populate_form()     # Populate form fields after loading/initializing
+        self.setWindowTitle("Project General Info")
+        self.setGeometry(150, 150, 1000, 800)
+        self.setMinimumSize(QSize(900, 700))
 
-    def load_project_data(self):
-        """
-        Loads project details if self.current_project_id is not None.
-        Otherwise, initializes a new empty Project object for creation.
-        """
+        self.init_ui() # Set up UI elements first
+
+        # Initialize form for new or existing project
         if self.current_project_id is not None:
-            try:
-                self.project = self.db_session.query(Project).filter_by(project_id=self.current_project_id).first()
-                if not self.project:
-                    QMessageBox.critical(self, "Error", f"Project with ID {self.current_project_id} not found.")
-                    self.close()
-                    return
-                self.setWindowTitle(f"Project General Info - {self.project.project_name}")
-            except Exception as e:
-                QMessageBox.critical(self, "Database Error", f"Failed to load project details: {e}")
-                self.close()
+            self.project_id_label.setText(f"ID: {self.current_project_id}") # Update label if ID is provided
+            self.load_project_data(self.current_project_id)
+            self.save_changes_button.setEnabled(True) # Enable for existing project
         else:
-            # Initialize a new, empty Project object for the form
-            self.project = Project(
-                project_name="", client_name="",
-                estimate_date=date.today(), bid_due_date=date.today(),
-                project_status="New", contract_type="Fixed Price",
-                # Initialize financial percentages to 0.0 by default for new projects
-                markup_percentage=0.0, overhead_percentage=0.0, profit_percentage=0.0
-                # Other fields will default to None/empty strings from the model
-            )
-            self.setWindowTitle("Project General Info - New Project")
+            # For a new project, display "N/A (New Project)" and clear form
+            self.project_id_label.setText("ID: N/A (New Project)")
+            self.clear_form_inputs()
+            self.save_changes_button.setEnabled(True) # ALWAYS ENABLE FOR NEW PROJECT TO ALLOW SAVING
 
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+
         main_layout.addWidget(QLabel("<h2>Project General Information</h2>", alignment=Qt.AlignCenter))
 
-        # --- General Info Group (Includes Project Name & Client Name) ---
-        general_info_group = QGroupBox("General Info")
-        general_info_layout = QFormLayout(general_info_group)
-        general_info_layout.setContentsMargins(10, 20, 10, 10)
-        general_info_layout.setSpacing(8)
+        # --- Main Grid Layout for Sections ---
+        grid_layout = QGridLayout()
+        grid_layout.setContentsMargins(15, 15, 15, 15)
+        grid_layout.setSpacing(15) # Spacing between major sections
 
-        self.project_id_label = QLabel("Project ID: New (Will be assigned)")
-        general_info_layout.addRow("Project ID:", self.project_id_label)
+        # --- 1. Project Details Section ---
+        project_details_group = QGroupBox("Project Details")
+        project_details_layout = QFormLayout(project_details_group)
+        project_details_layout.setContentsMargins(10, 20, 10, 10)
+        project_details_layout.setSpacing(8)
 
+        self.project_id_label = QLabel("N/A (New Project)")
+        project_details_layout.addRow("Project ID:", self.project_id_label)
         self.project_name_input = QLineEdit()
-        general_info_layout.addRow("Project Name:", self.project_name_input)
+        project_details_layout.addRow("Project Name:", self.project_name_input)
+
+        grid_layout.addWidget(project_details_group, 0, 0, 1, 2) # Row 0, spanning 2 columns
+
+        # --- 2. Client Information Section ---
+        client_info_group = QGroupBox("Client Information")
+        client_info_layout = QFormLayout(client_info_group)
+        client_info_layout.setContentsMargins(10, 20, 10, 10)
+        client_info_layout.setSpacing(8)
 
         self.client_name_input = QLineEdit()
-        general_info_layout.addRow("Client Name:", self.client_name_input)
-
+        client_info_layout.addRow("Client Name:", self.client_name_input)
         self.client_contact_input = QLineEdit()
-        general_info_layout.addRow("Client Contact:", self.client_contact_input)
-
+        client_info_layout.addRow("Contact Person:", self.client_contact_input)
         self.client_phone_input = QLineEdit()
-        general_info_layout.addRow("Client Phone:", self.client_phone_input)
-
+        self.client_phone_input.setPlaceholderText("e.g., 555-123-4567")
+        client_info_layout.addRow("Phone:", self.client_phone_input)
         self.client_email_input = QLineEdit()
-        general_info_layout.addRow("Client Email:", self.client_email_input)
+        self.client_email_input.setPlaceholderText("e.g., client@example.com")
+        client_info_layout.addRow("Email:", self.client_email_input)
 
-        main_layout.addWidget(general_info_group)
-        main_layout.addSpacing(15)
+        grid_layout.addWidget(client_info_group, 1, 0) # Row 1, Column 0
 
-        # --- Project Address Group ---
+        # --- 3. Client Address Section ---
+        client_address_group = QGroupBox("Client Address")
+        client_address_layout = QFormLayout(client_address_group)
+        client_address_layout.setContentsMargins(10, 20, 10, 10)
+        client_address_layout.setSpacing(8)
+
+        self.client_address_street_input = QLineEdit()
+        client_address_layout.addRow("Street:", self.client_address_street_input)
+        self.client_address_city_input = QLineEdit()
+        client_address_layout.addRow("City:", self.client_address_city_input)
+        self.client_address_state_input = QLineEdit()
+        client_address_layout.addRow("State:", self.client_address_state_input)
+        self.client_address_zip_input = QLineEdit()
+        client_address_layout.addRow("Zip Code:", self.client_address_zip_input)
+
+        grid_layout.addWidget(client_address_group, 1, 1) # Row 1, Column 1
+
+        # --- 4. Project Address Section ---
         project_address_group = QGroupBox("Project Address")
         project_address_layout = QFormLayout(project_address_group)
         project_address_layout.setContentsMargins(10, 20, 10, 10)
@@ -104,186 +113,309 @@ class GeneralInfoWindow(QMainWindow):
         self.project_address_state_input = QLineEdit()
         project_address_layout.addRow("State:", self.project_address_state_input)
         self.project_address_zip_input = QLineEdit()
-        project_address_layout.addRow("ZIP:", self.project_address_zip_input)
+        project_address_layout.addRow("Zip Code:", self.project_address_zip_input)
 
-        main_layout.addWidget(project_address_group)
-        main_layout.addSpacing(15)
+        grid_layout.addWidget(project_address_group, 2, 0) # Row 2, Column 0
 
-        # --- Schedule & Status Group ---
-        schedule_status_group = QGroupBox("Schedule & Status")
-        schedule_status_layout = QFormLayout(schedule_status_group)
-        schedule_status_layout.setContentsMargins(10, 20, 10, 10)
-        schedule_status_layout.setSpacing(8)
+        # --- 5. Dates, Status & Financial Percentages Section ---
+        dates_status_financial_group = QGroupBox("Dates, Status & Percentages")
+        dates_status_financial_layout = QFormLayout(dates_status_financial_group)
+        dates_status_financial_layout.setContentsMargins(10, 20, 10, 10)
+        dates_status_financial_layout.setSpacing(8)
 
         self.estimate_date_input = QDateEdit(calendarPopup=True)
         self.estimate_date_input.setDate(QDate.currentDate())
-        schedule_status_layout.addRow("Estimate Date:", self.estimate_date_input)
+        dates_status_financial_layout.addRow("Estimate Date:", self.estimate_date_input)
 
         self.bid_due_date_input = QDateEdit(calendarPopup=True)
         self.bid_due_date_input.setDate(QDate.currentDate())
-        schedule_status_layout.addRow("Bid Due Date:", self.bid_due_date_input)
+        dates_status_financial_layout.addRow("Bid Due Date:", self.bid_due_date_input)
 
-        self.project_status_combo = QComboBox()
-        self.project_status_combo.addItems(["New", "Bidding", "Active", "On Hold", "Completed", "Canceled"])
-        schedule_status_layout.addRow("Project Status:", self.project_status_combo)
+        self.project_start_date_input = QDateEdit(calendarPopup=True)
+        self.project_start_date_input.setDate(QDate.currentDate()) # Default to current date
+        dates_status_financial_layout.addRow("Project Start Date:", self.project_start_date_input)
 
-        self.contract_type_combo = QComboBox()
-        self.contract_type_combo.addItems(["Fixed Price", "Time & Materials", "Cost Plus", "Unit Price"])
-        schedule_status_layout.addRow("Contract Type:", self.contract_type_combo)
+        self.expected_completion_date_input = QDateEdit(calendarPopup=True)
+        self.expected_completion_date_input.setDate(QDate.currentDate().addYears(1)) # Default to 1 year from now, or adjust as needed
+        dates_status_financial_layout.addRow("Expected Completion Date:", self.expected_completion_date_input)
 
-        main_layout.addWidget(schedule_status_group)
-        main_layout.addSpacing(15)
+        self.project_status_input = QComboBox()
+        self.project_status_input.addItems(["New", "Estimate Sent", "Approved", "Rejected", "Completed", "Archived"])
+        dates_status_financial_layout.addRow("Project Status:", self.project_status_input)
 
-        # --- Scope of Work & Notes Group ---
-        scope_notes_group = QGroupBox("Scope & Notes")
-        scope_notes_layout = QVBoxLayout(scope_notes_group)
-        scope_notes_layout.setContentsMargins(10, 20, 10, 10)
-        scope_notes_layout.setSpacing(8)
+        self.contract_type_input = QComboBox()
+        self.contract_type_input.addItems(["Fixed Price", "Time & Materials", "Cost-Plus", "Unit Price"])
+        dates_status_financial_layout.addRow("Contract Type:", self.contract_type_input)
 
-        scope_notes_layout.addWidget(QLabel("Scope of Work:"))
+        # --- Markup, Overhead, Profit fields (Now QDoubleSpinBox) ---
+        self.markup_percentage_input = QDoubleSpinBox() # Changed to QDoubleSpinBox
+        self.markup_percentage_input.setSuffix("%")
+        self.markup_percentage_input.setRange(0.0, 100.0) # Set range 0-100%
+        self.markup_percentage_input.setSingleStep(0.1)
+        dates_status_financial_layout.addRow("Markup %:", self.markup_percentage_input)
+
+        self.overhead_percentage_input = QDoubleSpinBox() # Changed to QDoubleSpinBox
+        self.overhead_percentage_input.setSuffix("%")
+        self.overhead_percentage_input.setRange(0.0, 100.0)
+        self.overhead_percentage_input.setSingleStep(0.1)
+        dates_status_financial_layout.addRow("Overhead %:", self.overhead_percentage_input)
+
+        self.profit_percentage_input = QDoubleSpinBox() # Changed to QDoubleSpinBox
+        self.profit_percentage_input.setSuffix("%")
+        self.profit_percentage_input.setRange(0.0, 100.0)
+        self.profit_percentage_input.setSingleStep(0.1)
+        dates_status_financial_layout.addRow("Profit %:", self.profit_percentage_input)
+
+        grid_layout.addWidget(dates_status_financial_group, 2, 1) # Row 2, Column 1
+
+        main_layout.addLayout(grid_layout)
+
+        # --- 6. Scope of Work and Project Notes (Full Width) ---
+        long_text_container = QWidget()
+        long_text_layout = QHBoxLayout(long_text_container)
+        long_text_layout.setContentsMargins(0, 0, 0, 0)
+        long_text_layout.setSpacing(15)
+
+        scope_group = QGroupBox("Scope of Work")
+        scope_layout = QVBoxLayout(scope_group)
         self.scope_of_work_input = QTextEdit()
-        self.scope_of_work_input.setFixedHeight(70) # Compact height
-        scope_notes_layout.addWidget(self.scope_of_work_input)
+        self.scope_of_work_input.setPlaceholderText("Enter detailed scope of work here...")
+        scope_layout.addWidget(self.scope_of_work_input)
+        long_text_layout.addWidget(scope_group)
 
-        scope_notes_layout.addWidget(QLabel("Project Notes:"))
+        notes_group = QGroupBox("Project Notes")
+        notes_layout = QVBoxLayout(notes_group)
         self.project_notes_input = QTextEdit()
-        self.project_notes_input.setFixedHeight(70) # Compact height
-        scope_notes_layout.addWidget(self.project_notes_input)
+        self.project_notes_input.setPlaceholderText("Enter any additional project notes here...")
+        notes_layout.addWidget(self.project_notes_input)
+        long_text_layout.addWidget(notes_group)
 
-        main_layout.addWidget(scope_notes_group)
-        main_layout.addStretch(1) # Pushes content up
+        main_layout.addWidget(long_text_container)
 
-        # --- Save Button ---
-        save_button_layout = QHBoxLayout()
-        save_button_layout.addStretch(1)
-        self.save_button = QPushButton("Save Project Details")
-        self.save_button.clicked.connect(self.save_project_data)
-        save_button_layout.addWidget(self.save_button)
-        save_button_layout.addStretch(1)
-        main_layout.addLayout(save_button_layout)
+        main_layout.addSpacing(20)
 
+        # --- Buttons for Form Actions ---
+        form_buttons_layout = QHBoxLayout()
+        form_buttons_layout.addStretch(1)
 
-    def populate_form(self):
-        """Populates the form fields with current project data."""
-        if self.project:
-            if self.project.project_id:
-                self.project_id_label.setText(f"Project ID: {self.project.project_id}")
-                self.setWindowTitle(f"Project General Info - {self.project.project_name}")
+        self.save_changes_button = QPushButton("Save Changes")
+        self.save_changes_button.clicked.connect(self.save_project_changes)
+        # self.save_changes_button.setEnabled() is now handled in __init__
+        form_buttons_layout.addWidget(self.save_changes_button)
+
+        self.clear_form_button = QPushButton("Clear Form")
+        self.clear_form_button.clicked.connect(self.clear_form_inputs)
+        form_buttons_layout.addWidget(self.clear_form_button)
+
+        main_layout.addLayout(form_buttons_layout)
+        main_layout.addStretch(1)
+
+    def load_project_data(self, project_id: int):
+        try:
+            # current_project_id is already set in __init__
+            project = self.db_session.query(Project).filter_by(project_id=project_id).first()
+
+            if project:
+                self.project_id_label.setText(f"ID: {project.project_id}") # Display actual ID
+                self.project_name_input.setText(project.project_name or "")
+                self.client_name_input.setText(project.client_name or "")
+                self.client_contact_input.setText(project.client_contact_person or "")
+                self.client_phone_input.setText(project.client_phone or "")
+                self.client_email_input.setText(project.client_email or "")
+                self.client_address_street_input.setText(project.client_address_street or "")
+                self.client_address_city_input.setText(project.client_address_city or "")
+                self.client_address_state_input.setText(project.client_address_state or "")
+                self.client_address_zip_input.setText(project.client_address_zip or "")
+                self.project_address_street_input.setText(project.project_address_street or "")
+                self.project_address_city_input.setText(project.project_address_city or "")
+                self.project_address_state_input.setText(project.project_address_state or "")
+                self.project_address_zip_input.setText(project.project_address_zip or "")
+
+                # Set dates, handling potential None
+                self.estimate_date_input.setDate(QDate(project.estimate_date) if project.estimate_date else QDate.currentDate())
+                self.bid_due_date_input.setDate(QDate(project.bid_due_date) if project.bid_due_date else QDate.currentDate())
+                self.project_start_date_input.setDate(QDate(project.project_start_date) if project.project_start_date else QDate.currentDate())
+                self.expected_completion_date_input.setDate(QDate(project.expected_completion_date) if project.expected_completion_date else QDate.currentDate().addYears(1))
+
+                # Use setCurrentText for QComboBox
+                self.project_status_input.setCurrentText(project.project_status or "New")
+                self.contract_type_input.setCurrentText(project.contract_type or "Fixed Price")
+
+                # Set QDoubleSpinBox values
+                self.markup_percentage_input.setValue(project.markup_percentage if project.markup_percentage is not None else 0.0)
+                self.overhead_percentage_input.setValue(project.overhead_percentage if project.overhead_percentage is not None else 0.0)
+                self.profit_percentage_input.setValue(project.profit_percentage if project.profit_percentage is not None else 0.0)
+
+                self.scope_of_work_input.setPlainText(project.scope_of_work or "")
+                self.project_notes_input.setPlainText(project.project_notes or "")
+
+                # No need to setEnabled(True) here, it's already done in __init__ for existing projects
             else:
-                self.project_id_label.setText("Project ID: New (Will be assigned)")
-                self.setWindowTitle("Project General Info - New Project")
+                QMessageBox.warning(self, "Load Error", f"Project with ID {project_id} not found in database.")
+                self.clear_form_inputs() # If not found, revert to new project state
+                self.save_changes_button.setEnabled(True) # Re-enable for new project entry
+                self.current_project_id = None # Crucial: Indicate it's now a new project
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"Failed to load project data: {e}")
+            self.clear_form_inputs()
+            self.save_changes_button.setEnabled(True) # Re-enable for new project entry
+            self.current_project_id = None # Crucial: Indicate it's now a new project
 
-            self.project_name_input.setText(self.project.project_name or "")
-            self.client_name_input.setText(self.project.client_name or "")
-            self.client_contact_input.setText(self.project.client_contact or "")
-            self.client_phone_input.setText(self.project.client_phone or "")
-            self.client_email_input.setText(self.project.client_email or "")
+    def clear_form_inputs(self):
+        self.project_id_label.setText("ID: N/A (New Project)") # Set label for new project
+        self.project_name_input.clear()
+        self.client_name_input.clear()
+        self.client_contact_input.clear()
+        self.client_phone_input.clear()
+        self.client_email_input.clear()
+        self.client_address_street_input.clear()
+        self.client_address_city_input.clear()
+        self.client_address_state_input.clear()
+        self.client_address_zip_input.clear()
+        self.project_address_street_input.clear()
+        self.project_address_city_input.clear()
+        self.project_address_state_input.clear()
+        self.project_address_zip_input.clear()
 
-            self.project_address_street_input.setText(self.project.project_address_street or "")
-            self.project_address_city_input.setText(self.project.project_address_city or "")
-            self.project_address_state_input.setText(self.project.project_address_state or "")
-            self.project_address_zip_input.setText(self.project.project_address_zip or "")
+        self.estimate_date_input.setDate(QDate.currentDate())
+        self.bid_due_date_input.setDate(QDate.currentDate())
+        self.project_start_date_input.setDate(QDate.currentDate())
+        self.expected_completion_date_input.setDate(QDate.currentDate().addYears(1))
 
-            if self.project.estimate_date:
-                self.estimate_date_input.setDate(QDate(self.project.estimate_date))
-            else:
-                self.estimate_date_input.setDate(QDate.currentDate())
+        self.project_status_input.setCurrentIndex(0) # Reset to first item
+        self.contract_type_input.setCurrentIndex(0) # Reset to first item
 
-            if self.project.bid_due_date:
-                self.bid_due_date_input.setDate(QDate(self.project.bid_due_date))
-            else:
-                self.bid_due_date_input.setDate(QDate.currentDate())
+        self.markup_percentage_input.setValue(0.0) # Reset QDoubleSpinBox to 0.0
+        self.overhead_percentage_input.setValue(0.0)
+        self.profit_percentage_input.setValue(0.0)
 
-            self.project_status_combo.setCurrentText(self.project.project_status or "New")
-            self.contract_type_combo.setCurrentText(self.project.contract_type or "Fixed Price")
+        self.scope_of_work_input.clear()
+        self.project_notes_input.clear()
 
-            self.scope_of_work_input.setText(self.project.scope_of_work or "")
-            self.project_notes_input.setText(self.project.project_notes or "")
-
-            # REMOVED: Financial percentage inputs
-            # self.markup_percentage_input.setValue(self.project.markup_percentage if self.project.markup_percentage is not None else 0.0)
-            # self.overhead_percentage_input.setValue(self.project.overhead_percentage if self.project.overhead_percentage is not None else 0.0)
-            # self.profit_percentage_input.setValue(self.project.profit_percentage if self.project.profit_percentage is not None else 0.0)
+        # Crucial: Reset current_project_id to None when clearing, preparing for a new project
+        self.current_project_id = None
+        # Ensure save button is enabled to allow adding a new project
+        self.save_changes_button.setEnabled(True)
 
 
-    def save_project_data(self):
-        """Saves current form data to the database, either updating an existing project or creating a new one."""
+    def save_project_changes(self):
         project_name = self.project_name_input.text().strip()
         client_name = self.client_name_input.text().strip()
 
         if not project_name or not client_name:
-            QMessageBox.warning(self, "Input Error", "Project Name and Client Name are required.")
+            QMessageBox.warning(self, "Input Error", "Project Name and Client Name cannot be empty.")
+            return
+
+        # Retrieve values from QDoubleSpinBox directly
+        markup_percentage = self.markup_percentage_input.value()
+        overhead_percentage = self.overhead_percentage_input.value()
+        profit_percentage = self.profit_percentage_input.value()
+
+        client_contact = self.client_contact_input.text().strip()
+        client_phone = self.client_phone_input.text().strip()
+        client_email = self.client_email_input.text().strip()
+        client_address_street = self.client_address_street_input.text().strip()
+        client_address_city = self.client_address_city_input.text().strip()
+        client_address_state = self.client_address_state_input.text().strip()
+        client_address_zip = self.client_address_zip_input.text().strip()
+        project_address_street = self.project_address_street_input.text().strip()
+        project_address_city = self.project_address_city_input.text().strip()
+        project_address_state = self.project_address_state_input.text().strip()
+        project_address_zip = self.project_address_zip_input.text().strip()
+        estimate_date = self.estimate_date_input.date().toPython() # toPyDate() for datetime.date object
+        bid_due_date = self.bid_due_date_input.date().toPython()
+        project_start_date = self.project_start_date_input.date().toPython()
+        expected_completion_date = self.expected_completion_date_input.date().toPython()
+        project_status = self.project_status_input.currentText()
+        contract_type = self.contract_type_input.currentText()
+        scope_of_work = self.scope_of_work_input.toPlainText().strip()
+        project_notes = self.project_notes_input.toPlainText().strip()
+
+        if estimate_date > bid_due_date:
+            QMessageBox.warning(self, "Input Error", "Estimate Date cannot be after Bid Due Date.")
             return
 
         try:
-            if self.project.project_id is None: # This is a new project
+            if self.current_project_id is None:
+                # Add NEW project
                 new_project = Project(
                     project_name=project_name,
                     client_name=client_name,
-                    client_contact=self.client_contact_input.text().strip() or None,
-                    client_phone=self.client_phone_input.text().strip() or None,
-                    client_email=self.client_email_input.text().strip() or None,
-                    # Client address fields are intentionally not in this UI
-                    client_address_street=None,
-                    client_address_city=None,
-                    client_address_state=None,
-                    client_address_zip=None,
-                    # Project address fields are included
-                    project_address_street=self.project_address_street_input.text().strip() or None,
-                    project_address_city=self.project_address_city_input.text().strip() or None,
-                    project_address_state=self.project_address_state_input.text().strip() or None,
-                    project_address_zip=self.project_address_zip_input.text().strip() or None,
-                    estimate_date=self.estimate_date_input.date().toPython(),
-                    bid_due_date=self.bid_due_date_input.date().toPython(),
-                    project_status=self.project_status_combo.currentText(),
-                    contract_type=self.contract_type_combo.currentText(),
-                    scope_of_work=self.scope_of_work_input.toPlainText().strip() or None,
-                    project_notes=self.project_notes_input.toPlainText().strip() or None,
-                    # Initialize financial percentages to 0.0 for new projects if not provided by UI
-                    markup_percentage=0.0,
-                    overhead_percentage=0.0,
-                    profit_percentage=0.0
+                    client_contact_person=client_contact if client_contact else None,
+                    client_phone=client_phone if client_phone else None,
+                    client_email=client_email if client_email else None,
+                    client_address_street=client_address_street if client_address_street else None,
+                    client_address_city=client_address_city if client_address_city else None,
+                    client_address_state=client_address_state if client_address_state else None,
+                    client_address_zip=client_address_zip if client_address_zip else None,
+                    project_address_street=project_address_street if project_address_street else None,
+                    project_address_city=project_address_city if project_address_city else None,
+                    project_address_state=project_address_state if project_address_state else None,
+                    project_address_zip=project_address_zip if project_address_zip else None,
+                    estimate_date=estimate_date,
+                    bid_due_date=bid_due_date,
+                    project_start_date=project_start_date,
+                    expected_completion_date=expected_completion_date,
+                    project_status=project_status,
+                    contract_type=contract_type,
+                    markup_percentage=markup_percentage,
+                    overhead_percentage=overhead_percentage,
+                    profit_percentage=profit_percentage,
+                    scope_of_work=scope_of_work if scope_of_work else None,
+                    project_notes=project_notes if project_notes else None
                 )
                 self.db_session.add(new_project)
                 self.db_session.commit()
-                self.current_project_id = new_project.project_id # Update current_project_id
-                self.project = new_project # Update the internal project object
-                QMessageBox.information(self, "Success", "New project created successfully!")
-                self.populate_form() # Refresh form to show new ID etc.
+                self.current_project_id = new_project.project_id # CRITICAL: Update current_project_id with the new ID
+                QMessageBox.information(self, "Success", f"Project '{project_name}' added successfully! ID: {self.current_project_id}")
+                self.project_id_label.setText(f"ID: {self.current_project_id}") # Update the label on the form
 
-            else: # Updating an existing project
-                self.project.project_name = project_name
-                self.project.client_name = client_name
-                self.project.client_contact = self.client_contact_input.text().strip() or None
-                self.project.client_phone = self.client_phone_input.text().strip() or None
-                self.project.client_email = self.client_email_input.text().strip() or None
-                # Client address fields are not in UI, their existing values in DB will remain.
-                # Project address fields are updated
-                self.project.project_address_street = self.project_address_street_input.text().strip() or None
-                self.project.project_address_city = self.project_address_city_input.text().strip() or None
-                self.project.project_address_state = self.project_address_state_input.text().strip() or None
-                self.project.project_address_zip = self.project_address_zip_input.text().strip() or None
-                self.project.estimate_date = self.estimate_date_input.date().toPython()
-                self.project.bid_due_date = self.bid_due_date_input.date().toPython()
-                self.project.project_status = self.project_status_combo.currentText()
-                self.project.contract_type = self.contract_type_combo.currentText()
-                self.project.scope_of_work = self.scope_of_work_input.toPlainText().strip() or None
-                self.project.project_notes = self.project_notes_input.toPlainText().strip() or None
-                # REMOVED: Financial percentages are not updated from this UI, their existing values persist.
-                # self.project.markup_percentage = self.markup_percentage_input.value()
-                # self.project.overhead_percentage = self.overhead_percentage_input.value()
-                # self.project.profit_percentage = self.profit_percentage_input.value()
+            else:
+                # Update EXISTING project
+                project = self.db_session.query(Project).filter_by(project_id=self.current_project_id).first()
+                if project:
+                    project.project_name = project_name
+                    project.client_name = client_name
+                    project.client_contact_person = client_contact if client_contact else None
+                    project.client_phone = client_phone if client_phone else None
+                    project.client_email = client_email if client_email else None
+                    project.client_address_street = client_address_street if client_address_street else None
+                    project.client_address_city = client_address_city if client_address_city else None
+                    project.client_address_state = client_address_state if client_address_state else None
+                    project.client_address_zip = client_address_zip if client_address_zip else None
+                    project.project_address_street = project_address_street if project_address_street else None
+                    project.project_address_city = project_address_city if project_address_city else None
+                    project.project_address_state = project_address_state if project_address_state else None
+                    project.project_address_zip = project_address_zip if project_address_zip else None
+                    project.estimate_date = estimate_date
+                    project.bid_due_date = bid_due_date
+                    project.project_start_date = project_start_date
+                    project.expected_completion_date = expected_completion_date
+                    project.project_status = project_status if project_status else None
+                    project.contract_type = contract_type if contract_type else None
+                    project.markup_percentage = markup_percentage
+                    project.overhead_percentage = overhead_percentage
+                    project.profit_percentage = profit_percentage
+                    project.scope_of_work = scope_of_work if scope_of_work else None
+                    project.project_notes = project_notes if project_notes else None
 
-                self.db_session.commit()
-                QMessageBox.information(self, "Success", "Project updated successfully!")
+                    self.db_session.commit()
+                    QMessageBox.information(self, "Success", f"Project '{project_name}' updated successfully!")
+                else:
+                    QMessageBox.warning(self, "Error", "Project not found for update. It might have been deleted.")
 
-            self.project_updated_signal.emit() # Notify main window to refresh
-            self.close() # Close after saving/updating for cleaner workflow
+            self.project_updated_signal.emit() # Emit signal to notify dashboard to refresh
+            # It's generally better to let the calling window (dashboard) handle closing,
+            # but if you always want it to close after saving, keep this line:
+            # self.close()
 
         except Exception as e:
-            self.db_session.rollback()
-            QMessageBox.critical(self, "Database Error", f"Failed to save project: {e}")
+            self.db_session.rollback() # Rollback in case of error
+            QMessageBox.critical(self, "Database Error", f"Failed to save project: {e}\nCheck console for details.")
+            print(f"DEBUG: Database Error: {e}") # For more detailed debugging
 
     def closeEvent(self, event):
-        self.db_session.close()
+        # Close the database session when the window is closed
+        if self.db_session:
+            self.db_session.close()
         super().closeEvent(event)

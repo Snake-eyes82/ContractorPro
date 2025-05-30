@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QDate, Signal, QSize
 from datetime import date
 
 # Import your database models
-from database import Session, Project, EstimateLineItem
+from src.database import Session, Project, EstimateLineItem
 
 # --- PDF GENERATION LIBRARY (Install if you haven't) ---
 # You'll need ReportLab for PDF generation.
@@ -816,61 +816,3 @@ class ProjectDetailsWindow(QMainWindow):
         self.db_session.close()
         super().closeEvent(event)
 
-
-# Standalone testing for the view (optional)
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    from database import create_db_and_tables, Project, EstimateLineItem, Session
-    create_db_and_tables()
-
-    session = Session()
-    test_project = session.query(Project).first()
-    if not test_project:
-        new_project = Project(
-            project_name="Comprehensive Test Project",
-            client_name="Innovate Solutions Inc.",
-            client_contact_person="Alice Wonderland",
-            client_phone="999-888-7777",
-            client_email="alice@example.com",
-            client_address_street="123 Rabbit Hole",
-            client_address_city="Curious Town",
-            client_address_state="FL",
-            client_address_zip="32000",
-            project_address_street="456 Mad Hatter Lane",
-            project_address_city="Tea Party City",
-            project_address_state="FL",
-            project_address_zip="32001",
-            estimate_date=date(2024, 5, 29),
-            bid_due_date=date(2024, 6, 15),
-            project_status="In Progress",
-            contract_type="Fixed Price",
-            scope_of_work="Design and build a new office space including interior finishes and landscaping.",
-            project_notes="Client prefers eco-friendly materials where possible.",
-            markup_percentage=10.0,
-            overhead_percentage=5.0,
-            profit_percentage=15.0
-        )
-        session.add(new_project)
-        session.commit()
-        test_project_id = new_project.project_id
-    else:
-        test_project_id = test_project.project_id
-
-    # Add some dummy line items if not already present for this project
-    if not session.query(EstimateLineItem).filter_by(project_id=test_project_id).first():
-        session.add_all([
-            EstimateLineItem(project_id=test_project_id, line_item_description="Foundation Work", category="Labor", unit_of_measure_uom="HR", quantity=100.0, unit_cost=50.0, total_direct_cost=5000.0),
-            EstimateLineItem(project_id=test_project_id, line_item_description="Rebar (Grade 60)", category="Material", unit_of_measure_uom="LB", quantity=500.0, unit_cost=1.20, total_direct_cost=600.0),
-            EstimateLineItem(project_id=test_project_id, line_item_description="Concrete (3000 PSI)", category="Material", unit_of_measure_uom="CY", quantity=20.0, unit_cost=150.0, total_direct_cost=3000.0),
-            EstimateLineItem(project_id=test_project_id, line_item_description="Excavator Rental", category="Equipment", unit_of_measure_uom="DAY", quantity=5.0, unit_cost=300.0, total_direct_cost=1500.0),
-            EstimateLineItem(project_id=test_project_id, line_item_description="Electrical Rough-in", category="Subcontractor", unit_of_measure_uom="JOB", quantity=1.0, unit_cost=4000.0, total_direct_cost=4000.0),
-            EstimateLineItem(project_id=test_project_id, line_item_description="Site Mobilization", category="Other Direct Cost", unit_of_measure_uom="LS", quantity=1.0, unit_cost=1000.0, total_direct_cost=1000.0),
-            # Example of fixed overhead/profit line item if needed (though percentages are also used)
-            # EstimateLineItem(project_id=test_project_id, line_item_description="Fixed Overhead", category="Overhead", unit_of_measure_uom="LS", quantity=1.0, unit_cost=500.0, total_direct_cost=500.0),
-        ])
-        session.commit()
-    session.close()
-
-    window = ProjectDetailsWindow(project_id=test_project_id)
-    window.show()
-    sys.exit(app.exec())
