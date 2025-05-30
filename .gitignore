@@ -1,0 +1,17 @@
+# Python virtual environment
+venv/
+
+# Python compiled files
+*.pyc
+__pycache__/
+
+# PyInstaller build artifacts (excluding dist/ as requested)
+build/
+# dist/          # <-- COMMENTED OUT: Now allowing the dist/ folder to be tracked
+*.spec
+
+# Database file (if it's generated locally and not part of the core repo)
+contractor_pro.db
+
+# Logs and other temporary files
+*.log

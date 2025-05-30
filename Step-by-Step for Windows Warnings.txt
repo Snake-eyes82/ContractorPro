@@ -1,0 +1,29 @@
+-------------------------------------------------------------
+IMPORTANT: Running ContractorPro for the first time
+-------------------------------------------------------------
+
+When you download and try to run ContractorPro, you might see security warnings from your web browser (like Chrome or Edge) and Windows itself. This is NORMAL for software created by independent developers like us, because our application is not yet digitally signed by a large, recognized software company.
+
+Please follow these steps to ensure you can run the application:
+
+STEP 1: Downloading the file
+-----------------------------
+Your web browser might show a warning like "This file may be dangerous" or "Cannot be scanned for viruses."
+* **In Chrome:** Look for an arrow next to the download in the bottom bar, click it, and choose "Keep."
+* **In Microsoft Edge:** Look for "..." or "More actions" next to the download, and choose "Keep."
+* **In Firefox:** You might get a pop-up. Click "Save File" or "Keep."
+
+STEP 2: Running the 'ContractorPro.exe' (or 'main_app.exe')
+-------------------------------------------------------------
+After downloading and extracting the .zip file, when you try to open 'ContractorPro.exe':
+
+* **You will likely see a blue "Windows protected your PC" screen (Windows SmartScreen).**
+* **Do NOT click "Don't run."**
+* Look for a small link that says **"More info"** or **"Run anyway"**. Click on this link.
+* After clicking "More info," an option to **"Run anyway"** will appear. Click it.
+
+The application should now start.
+
+-------------------------------------------------------------
+If you have any concerns or issues, please contact us.
+-------------------------------------------------------------
