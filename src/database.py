@@ -38,6 +38,7 @@ class Project(Base):
     bid_due_date = Column(String)
     project_start_date = Column(String)
     completion_date = Column(String) # Corrected name from 'expected_completion_date'
+    estimate_date = Column(String)
 
     # Status and Type
     project_status = Column(String)

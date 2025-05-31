@@ -725,8 +725,8 @@ class ProjectDetailsWindow(QMainWindow):
             project_address = f"{getattr(project, 'project_address_street', '')}, {getattr(project, 'project_address_city', '')}, {getattr(project, 'project_address_state', '')} {getattr(project, 'project_address_zip', '')}".strip(', ').strip()
             if project_address:
                 story.append(Paragraph(f"Project Address: {project_address}", normal_style))
-            story.append(Paragraph(f"Estimate Date: {project.estimate_date.strftime('%Y-%m-%d') if project.estimate_date else 'N/A'}", normal_style))
-            story.append(Paragraph(f"Bid Due Date: {project.bid_due_date.strftime('%Y-%m-%d') if project.bid_due_date else 'N/A'}", normal_style))
+            story.append(Paragraph(f"Estimate Date: {project.estimate_date('%Y-%m-%d') if project.estimate_date else 'N/A'}", normal_style))
+            story.append(Paragraph(f"Bid Due Date: {project.bid_due_date('%Y-%m-%d') if project.bid_due_date else 'N/A'}", normal_style))
             story.append(Spacer(1, 0.1 * inch))
 
             # Scope of Work

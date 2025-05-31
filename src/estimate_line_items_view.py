@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSize
 from sqlalchemy import func
 from src.database import Session, Project, LineItem, CommonItem, CostCode, create_db_and_tables
+from src.pdf_generator import generate_pdf_estimate
 
 class EstimateLineItemsWindow(QMainWindow):
     # Signal to update total costs in the main dashboard or general info
@@ -18,6 +19,8 @@ class EstimateLineItemsWindow(QMainWindow):
         super().__init__(parent)
         self.db_session = db_session
         self.current_project_id = project_id
+        self.project = self.db_session.query(Project).get(project_id) # Load the project here
+
 
         # CORRECTED: Filter by 'id' not 'project_id' for the Project model
         self.current_project = self.db_session.query(Project).filter_by(id=self.current_project_id).first()
@@ -136,7 +139,105 @@ class EstimateLineItemsWindow(QMainWindow):
         self.clear_form_button.clicked.connect(self.clear_form)
         button_layout.addWidget(self.clear_form_button)
 
+        # Add this after your existing buttons (Add, Update, Delete, Clear)
+        pdf_export_button = QPushButton("Export to PDF")
+        pdf_export_button.clicked.connect(self.export_estimate_to_pdf)
+        button_layout.addWidget(pdf_export_button)
+
         main_layout.addLayout(button_layout)
+        
+    def export_estimate_to_pdf(self):
+        if not self.project:
+            QMessageBox.warning(self, "Export Error", "No project loaded to export.")
+            return
+
+        try:
+            # 1. Prepare project_data dictionary
+
+            # Reconstruct full client address from its components
+            client_address_parts = [
+                self.project.client_address_street,
+                self.project.client_address_city,
+                self.project.client_address_state,
+                self.project.client_address_zip
+            ]
+            # Filter out None/empty parts and join them with ", "
+            # If all parts are None or empty, default to "N/A"
+            full_client_address = ", ".join(filter(None, client_address_parts)) or "N/A"
+
+            # Reconstruct full project address from its components
+            project_address_parts = [
+                self.project.project_address, # This is the street part in your model
+                self.project.project_city,
+                self.project.project_state,
+                self.project.project_zip
+            ]
+            full_project_address = ", ".join(filter(None, project_address_parts)) or "N/A"
+
+            project_data_for_pdf = {
+                'project_id': self.project.id,
+                'project_name': self.project.project_name or "N/A",
+                'project_address': full_project_address, # USE THE RECONSTRUCTED FULL ADDRESS
+                'estimate_date': str(self.project.estimate_date) if self.project.estimate_date else "N/A",
+                'bid_due_date': str(self.project.bid_due_date) if self.project.bid_due_date else "N/A",
+                'project_start_date': str(self.project.project_start_date) if self.project.project_start_date else "N/A",
+                'completion_date': str(self.project.completion_date) if self.project.completion_date else "N/A",
+
+                'client_name': self.project.client_name or "N/A",
+                'client_contact': self.project.client_contact_person or "N/A", # Map to client_contact_person
+                'client_phone': self.project.client_phone or "N/A",
+                'client_email': self.project.client_email or "N/A",
+                'client_address': full_client_address, # USE THE RECONSTRUCTED FULL ADDRESS
+
+                'scope_of_work': self.project.scope_of_work or "",
+                'project_notes': self.project.notes or "" # USE 'notes' from your Project model
+            }
+
+            # 2. Prepare line_items_data list of dictionaries (no changes needed here from last correct version)
+            line_items_raw = self.db_session.query(LineItem).filter_by(project_id=self.project.id).order_by(LineItem.id).all()
+            line_items_data_for_pdf = []
+
+            for li in line_items_raw:
+                category = "Custom"
+                uom = li.unit or "N/A"
+
+                if li.common_item:
+                    category = li.common_item.type or li.common_item.name
+                    uom = li.common_item.unit or uom
+                elif li.cost_code:
+                    category = li.cost_code.name or category
+
+                line_item_total = li.total_cost if li.total_cost is not None else \
+                                  (li.quantity * li.unit_cost * (1 + (li.markup_percentage or 0)/100))
+
+                line_items_data_for_pdf.append({
+                    "description": li.description or "N/A",
+                    "category": category,
+                    "uom": uom,
+                    "quantity": li.quantity if li.quantity is not None else 0.0,
+                    "unit_cost": li.unit_cost if li.unit_cost is not None else 0.0,
+                    "total": line_item_total
+                })
+            if not line_items_data_for_pdf:
+                QMessageBox.information(self, "Export Info", "No line items to export for this project.")
+                return
+
+            # 3. Prepare financial_summary_data dictionary (no changes needed here from last correct version)
+            total_direct_cost = self.project.total_direct_cost if self.project.total_direct_cost is not None else 0.0
+            markup_percent = self.project.markup_percentage if self.project.markup_percentage is not None else 0.0
+
+            financial_summary_data_for_pdf = {
+                'total_direct_cost': total_direct_cost,
+                'markup_percentage': markup_percent,
+            }
+
+            # Call the PDF generation function
+            generate_pdf_estimate(project_data_for_pdf, line_items_data_for_pdf, financial_summary_data_for_pdf)
+            QMessageBox.information(self, "PDF Export", "Estimate exported to PDF successfully!")
+
+        except Exception as e:
+            QMessageBox.critical(self, "PDF Export Error", f"An error occurred during PDF generation: {e}\n\nPlease ensure the project data is complete and try again.")
+            print(f"DEBUG: PDF export error: {e}")
 
     def get_common_items(self):
         return self.db_session.query(CommonItem).order_by(CommonItem.name).all()
