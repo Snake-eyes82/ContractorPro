@@ -7,21 +7,21 @@ from PySide6.QtWidgets import (
     QPushButton, QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, Signal
 # Import the updated database functions and models
 from src.database import Session, Project, create_db_and_tables
 from src.general_info_view import GeneralInfoWindow
-from src.estimate_line_items_view import EstimateLineItemsWindow # NEW import
-from src.manage_common_data_view import ManageCommonDataWindow # Ensure this is imported for direct access
+from src.estimate_line_items_view import EstimateLineItemsWindow
+from src.manage_common_data_view import ManageCommonDataWindow
 
 class ContractorProEstimator(QMainWindow):
     def __init__(self):
         super().__init__()
         self.db_session = Session()
         self.setWindowTitle("ContractorPro Estimator Dashboard")
-        self.setGeometry(100, 100, 1200, 700) # Increased width to accommodate new columns
+        self.setGeometry(100, 100, 1200, 700)
         self.setMinimumSize(QSize(1100, 600))
-        self.current_project_id = None # To keep track of selected project
+        self.current_project_id = None
 
         self.init_ui()
         self.load_projects()
@@ -41,17 +41,16 @@ class ContractorProEstimator(QMainWindow):
         search_layout.addWidget(search_label)
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Enter Project Name or Client Name...")
-        self.search_input.textChanged.connect(self.load_projects) # Filter on text change
+        self.search_input.textChanged.connect(self.load_projects)
         search_layout.addWidget(self.search_input)
         main_layout.addLayout(search_layout)
 
         # Projects Table
         self.projects_table = QTableWidget()
-        # Increased column count to 9: ID, Project Name, Client Name, Status, Bid Due Date, Project Start Date, Expected Completion Date, Total Direct Cost, Final Estimate
         self.projects_table.setColumnCount(9)
         self.projects_table.setHorizontalHeaderLabels([
             "ID", "Project Name", "Client Name", "Status", "Bid Due Date",
-            "Project Start Date", "Expected Completion Date", "Total Direct Cost", "Final Estimate"
+            "Project Start Date", "Completion Date", "Total Direct Cost", "Final Estimate"
         ])
         self.projects_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.projects_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -67,22 +66,21 @@ class ContractorProEstimator(QMainWindow):
 
         self.open_general_info_button = QPushButton("Open General Info")
         self.open_general_info_button.clicked.connect(self.open_general_info)
-        self.open_general_info_button.setEnabled(False) # Disabled until project is selected
+        self.open_general_info_button.setEnabled(False)
         buttons_layout.addWidget(self.open_general_info_button)
 
         self.open_line_items_button = QPushButton("Open Line Items")
         self.open_line_items_button.clicked.connect(self.open_line_items)
-        self.open_line_items_button.setEnabled(False) # Disabled until project is selected
+        self.open_line_items_button.setEnabled(False)
         buttons_layout.addWidget(self.open_line_items_button)
 
         self.manage_common_data_button = QPushButton("Manage Common Items / Cost Codes")
         self.manage_common_data_button.clicked.connect(self.open_manage_common_data)
         buttons_layout.addWidget(self.manage_common_data_button)
 
-
         self.delete_selected_project_button = QPushButton("Delete Selected Project")
         self.delete_selected_project_button.clicked.connect(self.delete_selected_project)
-        self.delete_selected_project_button.setEnabled(False) # Disabled until project is selected
+        self.delete_selected_project_button.setEnabled(False)
         buttons_layout.addWidget(self.delete_selected_project_button)
 
         main_layout.addLayout(buttons_layout)
@@ -93,21 +91,22 @@ class ContractorProEstimator(QMainWindow):
         try:
             projects = self.db_session.query(Project).all()
             if search_text:
-                projects = [p for p in projects if search_text.lower() in p.project_name.lower() or search_text.lower() in p.client_name.lower()]
+                projects = [p for p in projects if search_text.lower() in (p.project_name or "").lower() or search_text.lower() in (p.client_name or "").lower()]
 
             self.projects_table.setRowCount(len(projects))
             for row_idx, project in enumerate(projects):
-                # These totals are now columns in the Project object
-                total_direct_cost = project.total_direct_cost
-                final_estimate = project.final_project_estimate
+                total_direct_cost = project.total_direct_cost if project.total_direct_cost is not None else 0.0
+                final_estimate = project.final_project_estimate if project.final_project_estimate is not None else 0.0
 
-                self.projects_table.setItem(row_idx, 0, QTableWidgetItem(str(project.project_id)))
-                self.projects_table.setItem(row_idx, 1, QTableWidgetItem(project.project_name))
-                self.projects_table.setItem(row_idx, 2, QTableWidgetItem(project.client_name))
+                self.projects_table.setItem(row_idx, 0, QTableWidgetItem(str(project.id)))
+                self.projects_table.setItem(row_idx, 1, QTableWidgetItem(project.project_name or ""))
+                self.projects_table.setItem(row_idx, 2, QTableWidgetItem(project.client_name or ""))
                 self.projects_table.setItem(row_idx, 3, QTableWidgetItem(project.project_status or ""))
-                self.projects_table.setItem(row_idx, 4, QTableWidgetItem(project.bid_due_date.strftime("%Y-%m-%d") if project.bid_due_date else ""))
-                self.projects_table.setItem(row_idx, 5, QTableWidgetItem(project.project_start_date.strftime("%Y-%m-%d") if project.project_start_date else ""))
-                self.projects_table.setItem(row_idx, 6, QTableWidgetItem(project.expected_completion_date.strftime("%Y-%m-%d") if project.expected_completion_date else ""))
+                
+                self.projects_table.setItem(row_idx, 4, QTableWidgetItem(project.bid_due_date or ""))
+                self.projects_table.setItem(row_idx, 5, QTableWidgetItem(project.project_start_date or ""))
+                self.projects_table.setItem(row_idx, 6, QTableWidgetItem(project.completion_date or ""))
+                
                 self.projects_table.setItem(row_idx, 7, QTableWidgetItem(f"${total_direct_cost:.2f}"))
                 self.projects_table.setItem(row_idx, 8, QTableWidgetItem(f"${final_estimate:.2f}"))
 
@@ -130,14 +129,15 @@ class ContractorProEstimator(QMainWindow):
             self.delete_selected_project_button.setEnabled(False)
 
     def add_new_project(self):
+        # Pass None for project_id to indicate a new project
         self.general_info_window = GeneralInfoWindow(project_id=None, db_session=self.db_session, parent_dashboard=self)
-        self.general_info_window.project_updated_signal.connect(self.load_projects) # Refresh on new project
+        self.general_info_window.project_updated_signal.connect(self.load_projects)
         self.general_info_window.show()
 
     def open_general_info(self):
         if self.current_project_id is not None:
             self.general_info_window = GeneralInfoWindow(project_id=self.current_project_id, db_session=self.db_session, parent_dashboard=self)
-            self.general_info_window.project_updated_signal.connect(self.load_projects) # Refresh on update
+            self.general_info_window.project_updated_signal.connect(self.load_projects)
             self.general_info_window.show()
         else:
             QMessageBox.warning(self, "No Project Selected", "Please select a project from the table first.")
@@ -150,16 +150,15 @@ class ContractorProEstimator(QMainWindow):
 
         project_id = int(self.projects_table.item(selected_row, 0).text())
 
-        # This is the line that caused the error, but should be fine
-        # once EstimateLineItemsWindow's __init__ is updated.
+        # Corrected: filter by 'id' in EstimateLineItemsWindow constructor
         self.line_items_window = EstimateLineItemsWindow(project_id=project_id, db_session=self.db_session, parent=self)
         self.line_items_window.show()
 
     def open_manage_common_data(self):
-        self.manage_common_data_window = ManageCommonDataWindow(db_session=self.db_session, parent=self)
-        self.manage_common_data_window.data_updated_signal.connect(self.load_projects) # Refresh dashboard if project names change in future
+        # Corrected: pass only db_session as a positional argument if __init__ doesn't expect keyword
+        self.manage_common_data_window = ManageCommonDataWindow(self.db_session, parent=self)
+        self.manage_common_data_window.data_updated_signal.connect(self.load_projects)
         self.manage_common_data_window.show()
-
 
     def delete_selected_project(self):
         if self.current_project_id is not None:
@@ -168,13 +167,13 @@ class ContractorProEstimator(QMainWindow):
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 try:
-                    project_to_delete = self.db_session.query(Project).filter_by(project_id=self.current_project_id).first()
+                    project_to_delete = self.db_session.query(Project).filter_by(id=self.current_project_id).first()
                     if project_to_delete:
                         self.db_session.delete(project_to_delete)
                         self.db_session.commit()
                         QMessageBox.information(self, "Success", f"Project ID {self.current_project_id} deleted successfully.")
-                        self.load_projects() # Refresh the table
-                        self.on_project_selection_changed() # Reset button states
+                        self.load_projects()
+                        self.on_project_selection_changed()
                     else:
                         QMessageBox.warning(self, "Error", "Selected project not found in database.")
                 except Exception as e:
@@ -190,8 +189,7 @@ class ContractorProEstimator(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # Ensure database tables are created when the app starts
-    create_db_and_tables() # Call the function
+    create_db_and_tables()
     window = ContractorProEstimator()
     window.show()
     sys.exit(app.exec())
