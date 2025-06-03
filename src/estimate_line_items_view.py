@@ -387,14 +387,14 @@ class EstimateLineItemsWindow(QMainWindow):
                     self.cost_code_combo.setCurrentIndex(0)
 
 
-                self.add_line_item_button.setEnabled(True)
-                self.update_line_item_button.setEnabled(True)
-                self.delete_line_item_button.setEnabled(True)
+                self.add_line_item_button.setEnabled(False)
+                self.update_line_item_button.setEnabled(False)
+                self.delete_line_item_button.setEnabled(False)
         else:
             self.clear_form()
-            self.add_line_item_button.setEnabled(True)
-            self.update_line_item_button.setEnabled(True)
-            self.delete_line_item_button.setEnabled(True)
+            self.add_line_item_button.setEnabled(False)
+            self.update_line_item_button.setEnabled(False)
+            self.delete_line_item_button.setEnabled(False)
 
     def add_or_update_line_item(self):
         description = self.description_input.text().strip()
@@ -522,7 +522,7 @@ class EstimateLineItemsWindow(QMainWindow):
         self.unit_cost_input.setReadOnly(False)
         
         self.line_items_table.clearSelection()
-        self.add_line_item_button.setEnabled(True)
+        self.add_line_item_button.setEnabled(False)
         self.update_line_item_button.setEnabled(False)
         self.delete_line_item_button.setEnabled(False)
 
