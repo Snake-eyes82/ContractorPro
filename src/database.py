@@ -3,6 +3,8 @@
 import os
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Text, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+import sys
+
 
 # Define the path to the database file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

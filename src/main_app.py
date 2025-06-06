@@ -14,6 +14,15 @@ from src.general_info_view import GeneralInfoWindow
 from src.estimate_line_items_view import EstimateLineItemsWindow
 from src.manage_common_data_view import ManageCommonDataWindow
 
+# After:
+# Import the updated database functions and models
+# from database import Session, Project, create_db_and_tables
+# from views.general_info_view import GeneralInfoWindow # Assuming views is a subfolder in src
+# from views.estimate_line_items_view import EstimateLineItemsWindow # Assuming views is a subfolder in src
+# from views.manage_common_data_view import ManageCommonDataWindow # Assuming views is a subfolder in src
+# from ui.main_app_ui import Ui_MainWindow # Make sure this one is also adjusted if it used 'src.ui'
+# from common.base_model_manager import BaseModelManager # And this one if it's in src/common
+
 class ContractorProEstimator(QMainWindow):
     def __init__(self):
         super().__init__()

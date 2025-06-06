@@ -127,12 +127,12 @@ class EstimateLineItemsWindow(QMainWindow):
 
         self.update_line_item_button = QPushButton("Update Selected")
         self.update_line_item_button.clicked.connect(self.add_or_update_line_item)
-        self.update_line_item_button.setEnabled(False)
+        self.update_line_item_button.setEnabled(True)
         button_layout.addWidget(self.update_line_item_button)
 
         self.delete_line_item_button = QPushButton("Delete Selected")
         self.delete_line_item_button.clicked.connect(self.delete_line_item)
-        self.delete_line_item_button.setEnabled(False)
+        self.delete_line_item_button.setEnabled(True)
         button_layout.addWidget(self.delete_line_item_button)
 
         self.clear_form_button = QPushButton("Clear Form")
@@ -145,7 +145,7 @@ class EstimateLineItemsWindow(QMainWindow):
         button_layout.addWidget(pdf_export_button)
 
         main_layout.addLayout(button_layout)
-        
+
     def export_estimate_to_pdf(self):
         if not self.project:
             QMessageBox.warning(self, "Export Error", "No project loaded to export.")
@@ -272,7 +272,7 @@ class EstimateLineItemsWindow(QMainWindow):
                 # Assuming common items have a default unit_cost or it's set by user later
                 # For now, we won't populate unit_cost from common item as it varies by project
                 # self.unit_cost_input.setValue(item.default_cost) # If you add a default_cost to CommonItem
-                
+
                 # Try to pre-select cost code if mf_code exists and matches
                 if item.mf_code:
                     for i in range(self.cost_code_combo.count()):
@@ -306,7 +306,7 @@ class EstimateLineItemsWindow(QMainWindow):
     def calculate_and_display_totals(self):
         # Recalculate total_direct_cost and final_project_estimate for the project
         total_direct_cost = self.db_session.query(func.sum(LineItem.quantity * LineItem.unit_cost)).filter_by(project_id=self.current_project_id).scalar() or 0.0
-        
+
         # Calculate total cost with markup for all line items
         total_cost_with_markup = self.db_session.query(
             func.sum(LineItem.quantity * LineItem.unit_cost * (1 + LineItem.markup_percentage / 100))
@@ -328,12 +328,12 @@ class EstimateLineItemsWindow(QMainWindow):
         misc_expenses = self.current_project.misc_expenses if self.current_project.misc_expenses is not None else 0.0
 
         final_project_estimate = (
-            total_cost_with_markup + 
-            overhead_amount + 
-            profit_amount + 
-            permit_cost + 
-            bonding_cost + 
-            insurance_cost + 
+            total_cost_with_markup +
+            overhead_amount +
+            profit_amount +
+            permit_cost +
+            bonding_cost +
+            insurance_cost +
             misc_expenses
         )
 
@@ -387,14 +387,14 @@ class EstimateLineItemsWindow(QMainWindow):
                     self.cost_code_combo.setCurrentIndex(0)
 
 
-                self.add_line_item_button.setEnabled(False)
-                self.update_line_item_button.setEnabled(False)
-                self.delete_line_item_button.setEnabled(False)
+                self.add_line_item_button.setEnabled(True)
+                self.update_line_item_button.setEnabled(True)
+                self.delete_line_item_button.setEnabled(True)
         else:
             self.clear_form()
-            self.add_line_item_button.setEnabled(False)
-            self.update_line_item_button.setEnabled(False)
-            self.delete_line_item_button.setEnabled(False)
+            self.add_line_item_button.setEnabled(True)
+            self.update_line_item_button.setEnabled(True)
+            self.delete_line_item_button.setEnabled(True)
 
     def add_or_update_line_item(self):
         description = self.description_input.text().strip()
@@ -522,9 +522,9 @@ class EstimateLineItemsWindow(QMainWindow):
         self.unit_cost_input.setReadOnly(False)
         
         self.line_items_table.clearSelection()
-        self.add_line_item_button.setEnabled(False)
-        self.update_line_item_button.setEnabled(False)
-        self.delete_line_item_button.setEnabled(False)
+        self.add_line_item_button.setEnabled(True)
+        self.update_line_item_button.setEnabled(True)
+        self.delete_line_item_button.setEnabled(True)
 
     def closeEvent(self, event):
         if self.db_session:
